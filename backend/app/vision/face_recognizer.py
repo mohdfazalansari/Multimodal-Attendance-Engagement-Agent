@@ -32,6 +32,14 @@ class LocalFaceRecognizer:
             minSize=(60, 60)
         )
         if len(faces) == 0:
+            # Sensitive fallback for webcam lighting and closer/smaller face scales
+            faces = self.face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.05,
+                minNeighbors=3,
+                minSize=(30, 30)
+            )
+        if len(faces) == 0:
             return None
 
         # Return largest face crop

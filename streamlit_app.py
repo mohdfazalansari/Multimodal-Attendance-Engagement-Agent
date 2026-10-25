@@ -64,8 +64,10 @@ from app.services.suggestion_service import SuggestionService
 from app.models.db_models import Student, Session, AttendanceRecord, EngagementWindow, TeachingSuggestion
 from app.schemas.attendance import AttendanceUpdate
 from app.schemas.student import StudentCreate
-from app.schemas.session import SessionCreate
-from app.utils.seed_full_demo import seed_full_classroom_data
+try:
+    from app.utils.seed_full_demo import seed_full_classroom_data
+except ImportError:
+    from app.utils.synthetic_seeding import seed_demo_data as seed_full_classroom_data
 
 # ---------------------------------------------------------
 # 2. Streamlit Page Configuration & Modern Aesthetics

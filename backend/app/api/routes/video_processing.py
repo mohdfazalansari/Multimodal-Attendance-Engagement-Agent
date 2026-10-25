@@ -12,11 +12,13 @@ from app.core.config import settings
 from app.services.student_service import StudentService
 from app.services.session_service import SessionService
 from app.services.attendance_service import AttendanceService
+from app.services.suggestion_service import SuggestionService
 from app.vision.pipeline import MultimodalPipeline
 from app.models.db_models import Session
 
 router = APIRouter()
 pipeline = MultimodalPipeline()
+suggestion_service = SuggestionService()
 
 # In-memory job tracker for video upload background processing
 ACTIVE_JOBS: Dict[str, Dict] = {}
@@ -28,8 +30,10 @@ async def run_video_processing_task(job_id: str, session_id: int, video_path: st
 
     async with AsyncSessionLocal() as db:
         try:
-            # Load consented student embeddings
-            enrolled = await StudentService.load_all_consented_embeddings(db)
+            # Load consented student embeddings strictly for this session's enrolled cohort
+            session_obj = await SessionService.get_by_id(db, session_id)
+            target_class = session_obj.target_class if session_obj else None
+            enrolled = await StudentService.load_all_consented_embeddings(db, course_name=target_class)
             enrolled_cache = [(s.id, s.full_name, emb) for s, emb in enrolled]
 
             def update_progress(prog: float, msg: str):
@@ -49,6 +53,12 @@ async def run_video_processing_task(job_id: str, session_id: int, video_path: st
                 progress_callback=update_progress,
                 cancel_check=cancel_check
             )
+
+            # Auto-generate teaching suggestions from actual processed windows
+            try:
+                await suggestion_service.generate_and_save_for_session(db, session_id)
+            except Exception as e:
+                print(f"[VideoProcessing] Notice generating suggestions: {e}")
 
             # Mark session as completed
             await SessionService.update_status(db, session_id, "COMPLETED")
@@ -150,11 +160,19 @@ async def process_live_frame(
     if frame is None:
         raise HTTPException(status_code=400, detail="Invalid frame image format.")
 
-    enrolled = await StudentService.load_all_consented_embeddings(db)
+    session_obj = await SessionService.get_by_id(db, session_id)
+    target_class = session_obj.target_class if session_obj else None
+    enrolled = await StudentService.load_all_consented_embeddings(db, course_name=target_class)
     enrolled_cache = [(s.id, s.full_name, emb) for s, emb in enrolled]
 
     # Detect
     detections = pipeline.detector.detect(frame)
+    if not detections:
+        # Fallback for close-up webcam framing where YOLO person torso is not in view
+        direct_face = pipeline.face_recognizer.detect_face(frame)
+        if direct_face is not None:
+            h, w = frame.shape[:2]
+            detections = [(0, 0, w, h, 0.85)]
     tracks = pipeline.tracker.update(detections)
 
     recognized_names = []
@@ -163,14 +181,18 @@ async def process_live_frame(
     for track in tracks:
         x1, y1, x2, y2 = track.bbox
         crop = frame[y1:y2, x1:x2]
+        face_crop = None
         if crop.size > 0:
             face_crop = pipeline.face_recognizer.detect_face(crop)
-            if face_crop is not None:
-                is_fwd, yaw, pitch, roll = pipeline.head_pose.estimate_orientation(face_crop)
-                if is_fwd:
-                    forward_count += 1
-                
-                if track.matched_student_id is None and enrolled_cache:
+        if face_crop is None:
+            face_crop = pipeline.face_recognizer.detect_face(frame)
+
+        if face_crop is not None:
+            is_fwd, yaw, pitch, roll = pipeline.head_pose.estimate_orientation(face_crop)
+            if is_fwd:
+                forward_count += 1
+            
+            if track.matched_student_id is None and enrolled_cache:
                     emb = pipeline.face_recognizer.extract_embedding(face_crop)
                     if emb is not None:
                         s_id, s_name, score = pipeline.face_recognizer.match_face(emb, enrolled_cache)

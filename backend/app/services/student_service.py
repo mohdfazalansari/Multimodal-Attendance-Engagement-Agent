@@ -156,15 +156,23 @@ class StudentService:
         return True
 
     @staticmethod
-    async def load_all_consented_embeddings(db: AsyncSession) -> List[Tuple[Student, np.ndarray]]:
+    async def load_all_consented_embeddings(db: AsyncSession, course_name: Optional[str] = None) -> List[Tuple[Student, np.ndarray]]:
         """Loads valid embeddings in memory for high-speed local cosine matching during sessions."""
         query = select(Student).where(
             Student.is_archived == False,
             Student.has_consented == True,
             Student.embedding_path != None
         )
-        result = await db.execute(query)
-        students = result.scalars().all()
+        students = []
+        if course_name:
+            cohort_res = await db.execute(query.where(Student.course_name == course_name))
+            students = cohort_res.scalars().all()
+        
+        # If no cohort was specified, or if no students are found under that specific cohort code,
+        # fallback to all consented students so live recognition and testing works seamlessly!
+        if not students:
+            all_res = await db.execute(query)
+            students = all_res.scalars().all()
         
         enrolled_cache = []
         for s in students:

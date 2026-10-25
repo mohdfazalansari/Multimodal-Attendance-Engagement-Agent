@@ -34,6 +34,9 @@ app.add_middleware(
 # Include master API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+# Mount authorized sample media for live demonstrations and testing
+app.mount("/sample_media", StaticFiles(directory=str(settings.DATA_DIR)), name="sample_media")
+
 @app.get("/")
 def root():
     return {

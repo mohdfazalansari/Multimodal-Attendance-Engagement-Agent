@@ -128,5 +128,8 @@ async def seed_demo_data():
         await db.commit()
         print("Demo data successfully populated!")
 
+# Alias for backward and cross-module compatibility
+seed_full_classroom_data = seed_demo_data
+
 if __name__ == "__main__":
     asyncio.run(seed_demo_data())
