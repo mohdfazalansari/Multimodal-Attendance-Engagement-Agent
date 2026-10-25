@@ -1,0 +1,17 @@
+# Streamlit Community Cloud Deployment Requirements
+# Target: Python 3.12 (Debian Linux container)
+streamlit>=1.35.0
+sqlalchemy>=2.0.30
+aiosqlite>=0.20.0
+greenlet>=3.0.0
+pydantic>=2.8.0
+numpy>=1.26.0,<2.0.0
+scipy>=1.13.0
+opencv-python-headless>=4.10.0
+torch>=2.2.0
+torchvision>=0.17.0
+ultralytics>=8.2.0
+keras-facenet>=0.3.2
+pandas>=2.0.0
+altair>=5.0.0
+httpx>=0.27.0
