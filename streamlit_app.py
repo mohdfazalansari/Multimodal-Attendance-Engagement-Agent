@@ -28,6 +28,30 @@ def run_async(coro):
     future = _EXECUTOR.submit(asyncio.run, coro)
     return future.result()
 
+# Defensive fallback shim: ensure HTTPException and status exist even if fastapi is absent
+try:
+    import fastapi
+except ImportError:
+    import types
+    class HTTPException(Exception):
+        def __init__(self, status_code: int = 500, detail: str = ""):
+            self.status_code = status_code
+            self.detail = detail
+            super().__init__(f"HTTP {status_code}: {detail}")
+    
+    class Status:
+        HTTP_200_OK = 200
+        HTTP_201_CREATED = 201
+        HTTP_400_BAD_REQUEST = 400
+        HTTP_404_NOT_FOUND = 404
+        HTTP_409_CONFLICT = 409
+        HTTP_500_INTERNAL_SERVER_ERROR = 500
+
+    fastapi_mock = types.ModuleType("fastapi")
+    fastapi_mock.HTTPException = HTTPException
+    fastapi_mock.status = Status
+    sys.modules["fastapi"] = fastapi_mock
+
 # Import backend models, services and configs
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal

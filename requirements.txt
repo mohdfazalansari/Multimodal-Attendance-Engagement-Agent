@@ -1,6 +1,8 @@
 # Streamlit Community Cloud Deployment Requirements
 # Target: Python 3.12 (Debian Linux container)
 streamlit>=1.35.0
+fastapi>=0.115.0
+python-multipart>=0.0.9
 sqlalchemy>=2.0.30
 aiosqlite>=0.20.0
 greenlet>=3.0.0
